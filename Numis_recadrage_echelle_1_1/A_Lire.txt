@@ -1,0 +1,15 @@
+Mise à l'échelle et recadrage de photos à l'échelle 1:1 (300dpi)
+
+1. Double-cliquer sur Numis_recadrage_1_1.html
+2. Choisir un dossier photo.
+3. Cliquer deux points distants d'1cm dans la réalité sur l'échelle graphique.
+4. Indiquer la taille voulue en sortie en mm du recadrage carré.
+5. Déplacer le carré rouge.
+5. Enregistrer.
+
+Source:
+ChatGPT 5.6 le 21/09/2026 
+prompt1: J'ai une série de photo avec des échelles graphiques (de taille légèrement différentes sur chaque photo) et je voudrais les recadrer au format carré à l’échelle réelle 1:1 a 300 dpi. Est ce que tu peux me faire une interface type web en local dans laquelle je charge un dossier et image par image je peux cliquer sur 2 points de distance 1cm sur la photo puis recadrer en carré a 300dpi..
+prompt2: alors la v1 est deja pas mal mais je ne vois pas les photos quand j'ai selectionné le dossier
+
+by @rcheomatic - Sylvain Badey - Inrap 2026

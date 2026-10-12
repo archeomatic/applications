@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f5c63">
+<title>Autour de moi</title>
+<style>
+:root{--bg:#f3f6f6;--fg:#12292c;--card:#fff;--line:#c9d6d7;--acc:#0f5c63;--accfg:#fff;--mut:#506366}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1819;--fg:#e4eeee;--card:#152527;--line:#294144;--acc:#5cc4cc;--accfg:#06191b;--mut:#93aaad}}
+*{box-sizing:border-box}
+body{margin:0;font:18px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+header{padding:10px 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
+h1{font-size:18px;margin:0;flex:1 1 100%}
+select,button{font:inherit;min-height:48px;border-radius:10px;border:1px solid var(--line);padding:0 14px;background:var(--card);color:var(--fg)}
+button.main{background:var(--acc);color:var(--accfg);border-color:var(--acc);font-weight:600;flex:1}
+button:focus-visible,a:focus-visible,select:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+#status{padding:8px 14px;font-size:15px;color:var(--mut)}
+ul{list-style:none;margin:0 0 8px;padding:6px 8px 0;max-height:340px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.arrow{width:34px;height:34px;flex:none;color:var(--acc);transition:transform .2s}
+.txt{flex:1;min-width:0}
+.txt b{display:block;font-size:17px;line-height:1.25;font-weight:600}
+.txt span{font-size:15px;color:var(--mut)}
+li a{flex:none;display:flex;align-items:center;justify-content:center;min-height:44px;padding:0 12px;border-radius:10px;background:var(--acc);color:var(--accfg);text-decoration:none;font-weight:600;font-size:16px}
+.wrap{position:relative;flex:1;display:flex}
+.wrap .main{flex:1}
+#count{position:absolute;top:-8px;right:-4px;min-width:26px;height:26px;border-radius:13px;padding:0 6px;background:var(--fg);color:var(--bg);font-size:14px;font-weight:700;display:none;align-items:center;justify-content:center;border:2px solid var(--bg)}
+#status:empty{display:none}
+#mapbox{display:none;padding:0 8px 20px}
+#map{display:block;width:100%;max-height:60vh;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.ring{fill:none;stroke:var(--acc);stroke-width:1;opacity:.7}
+.dot{fill:var(--acc);stroke:var(--card);stroke-width:1.5}
+.dn{fill:var(--accfg);font:700 8px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central}
+.lbl{fill:var(--fg);font:700 7px system-ui,sans-serif;text-anchor:middle;stroke:var(--card);stroke-width:2.5px;paint-order:stroke}
+.attr{fill:var(--fg);font:4.5px system-ui,sans-serif;text-anchor:end;stroke:var(--card);stroke-width:2px;paint-order:stroke}
+.num{color:var(--mut);font-weight:400}
+li a{padding:0 12px;min-height:40px;font-size:15px}
+.tile{filter:grayscale(.6) contrast(1.15) brightness(1.02)}
+@media(prefers-color-scheme:dark){.tile{filter:invert(1) hue-rotate(180deg) grayscale(.6) contrast(.95) brightness(.9)}}
+#attrBtn,#attrBtn *{outline:none;-webkit-tap-highlight-color:transparent;user-select:none}
+#attrBtn:focus-visible circle{stroke:var(--acc);stroke-width:1.5}
+</style>
+</head>
+<body>
+<header>
+  <label for="r" class="sr" style="position:absolute;left:-999px">Rayon</label>
+  <select id="r"><option value="100">100 m</option><option value="200" selected>200 m</option><option value="500">500 m</option><option value="1000">1 km</option><option value="2000">2 km</option></select>
+  <button id="fs" aria-label="Plein écran" style="width:48px;padding:0;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <div class="wrap"><button class="main" id="go">Me localiser</button><span id="count" aria-live="polite"></span></div>
+</header>
+<div id="status" role="status" aria-live="polite">Appuyez sur « Me localiser ». Écouter : menu ⋮ de Chrome, « Écouter ».</div>
+<ul id="list"></ul>
+<div id="mapbox"><svg id="map" viewBox="-100 -100 200 200" role="img" aria-label="Carte des lieux autour de vous, le haut est devant vous">
+  <g id="rot"></g>
+  <circle class="ring" r="88" style="stroke-dasharray:0"/><circle class="ring" r="44" style="stroke-dasharray:3 3"/>
+  <text class="lbl" id="lblOut" y="97"></text><text class="lbl" id="lblIn" y="-47" x="0"></text>
+  <path d="M0-7l6 12-6-3-6 3z" fill="var(--fg)" stroke="var(--card)" stroke-width="1.5"/>
+  <text class="attr" id="attrTxt" x="-98" y="98" style="text-anchor:start;stroke-width:1.2px"></text>
+  <g id="attrBtn" role="button" tabindex="0" style="cursor:pointer" aria-label="Masquer ou afficher le fond de carte"><rect x="74" y="74" width="26" height="26" fill="transparent"/><circle cx="90" cy="90" r="7" fill="var(--card)" opacity=".8"/><path id="xIcon" stroke="var(--fg)" stroke-width="1.6" stroke-linecap="round" fill="none"/></g>
+</svg></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const status = t => $('status').textContent = t;
+const rad = d => d * Math.PI / 180;
+
+function bearing(lat1, lon1, lat2, lon2){
+  const y = Math.sin(rad(lon2-lon1)) * Math.cos(rad(lat2));
+  const x = Math.cos(rad(lat1))*Math.sin(rad(lat2)) - Math.sin(rad(lat1))*Math.cos(rad(lat2))*Math.cos(rad(lon2-lon1));
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+function cardinal(b){
+  const n = ['nord','nord-est','est','sud-est','sud','sud-ouest','ouest','nord-ouest'];
+  return n[Math.round(b/45) % 8];
+}
+
+// Filtre : on écarte commerces, entreprises, écoles, hôpitaux… sauf si l'article relève du patrimoine ou de la nature
+const KEEP = /monument|patrimoine|site (class|inscrit|archéo|remarquable|naturel)|parc|jardin|musée|château|manoir|église|cathédrale|abbaye|chapelle|basilique|temple|synagogue|mosquée|couvent|prieuré|fontaine|pont|tour |fort|rempart|muraille|moulin|statue|mémorial|monument aux morts|réserve|forêt|bois |rivière|fleuve|lac|étang|plage|grotte|falaise|sentier|belvédère|place |quartier historique|vieille ville|hôtel particulier|halles|théâtre|amphithéâtre|arène|vestige|archéolog|lieu de mémoire|cimetière|zoo|aquarium|point de vue|village/i;
+const DROP = /centre commercial|supermarché|hypermarché|grande surface|galerie marchande|magasin|enseigne|entreprise|société|marque|banque|assurance|école|collège|lycée|université|établissement (scolaire|d'enseignement)|hôpital|clinique|établissement de santé|zone (d'activité|industrielle|commerciale)|usine|siège social|gare|station de|arrêt de|ligne de|équipement sportif|stade|salle de sport|cinéma|hôtel|restaurant|caserne|prison|centre (de|d')|immeuble|tour de bureaux|résidence|lotissement/i;
+function isTouristic(p){
+  if (p.cats.some(c => KEEP.test(c))) return true;
+  return !p.cats.some(c => DROP.test(c));
+}
+function distance(la1, lo1, la2, lo2){
+  const dLa = rad(la2-la1), dLo = rad(lo2-lo1);
+  const h = Math.sin(dLa/2)**2 + Math.cos(rad(la1))*Math.cos(rad(la2))*Math.sin(dLo/2)**2;
+  return 2 * 6371000 * Math.asin(Math.sqrt(h));
+}
+
+// Plein écran : Chrome l'autorise seulement après un appui de l'utilisateur
+const goFull = () => { const d = document.documentElement; if (!document.fullscreenElement && d.requestFullscreen) d.requestFullscreen({navigationUI:'hide'}).catch(() => {}); };
+$('fs').onclick = () => document.fullscreenElement ? document.exitFullscreen() : goFull();
+$('go').onclick = () => {
+  goFull();
+  if (!navigator.geolocation) return status("La géolocalisation n'est pas disponible.");
+  status('Localisation en cours…');
+  navigator.geolocation.getCurrentPosition(search, e => status('Position impossible : ' + e.message + '. Autorisez la localisation pour ce site.'),
+    {enableHighAccuracy:true, timeout:20000});
+};
+
+const norm = t => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\([^)]*\)/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+
+async function fetchSite(site, lat, lon, r, withCats){
+  const props = 'coordinates|pageprops' + (withCats ? '|categories' : '');
+  const u = `https://fr.${site}.org/w/api.php?action=query&generator=geosearch&ggscoord=${lat}|${lon}&ggsradius=${r}&ggslimit=50&prop=${props}&ppprop=wikibase_item&cllimit=max&clshow=!hidden&format=json&origin=*`;
+  const j = await (await fetch(u)).json();
+  return Object.values((j.query && j.query.pages) || {}).filter(p => p.coordinates).map(p => ({
+    id: p.pageid, title: p.title, lat: p.coordinates[0].lat, lon: p.coordinates[0].lon,
+    qid: p.pageprops && p.pageprops.wikibase_item,
+    dist: distance(lat, lon, p.coordinates[0].lat, p.coordinates[0].lon),
+    cats: (p.categories || []).map(c => c.title.replace(/^Catégorie:/, ''))
+  }));
+}
+
+async function search(pos){
+  const {latitude: lat, longitude: lon} = pos.coords;
+  const r = $('r').value;
+  status('Recherche des lieux…'); $('count').style.display = 'none';
+  try{
+    const items = (await fetchSite('wikipedia', lat, lon, r, true))
+      .filter(isTouristic).map(p => ({...p, wp: p.id}))
+      .sort((x, y) => x.dist - y.dist);
+    $('list').innerHTML = ''; $('list').scrollTop = 0;
+    $('count').style.display = 'flex'; $('count').textContent = items.length;
+    $('mapbox').style.display = 'block';
+    drawMap(items, lat, lon, +r);
+    if (!items.length) return status(`Aucun lieu dans un rayon de ${r} m. Essayez un rayon plus grand.`);
+    status('');
+    items.forEach((p, i) => {
+      const b = bearing(lat, lon, p.lat, p.lon);
+      const li = document.createElement('li');
+      li.innerHTML = `<svg class="arrow" viewBox="0 0 24 24" data-b="${b}" aria-hidden="true"><path d="M12 2l6 18-6-4-6 4z" fill="currentColor"/></svg>
+        <div class="txt"><b></b><span>${Math.round(p.dist)} m · ${cardinal(b)}</span></div>
+        <a href="https://fr.m.wikipedia.org/?curid=${p.wp}" target="_blank" rel="noopener">Wiki</a>`;
+      li.querySelector('b').innerHTML = `<span class="num">${i+1}.</span> `; li.querySelector('b').append(p.title);
+      $('list').appendChild(li);
+    });
+    updateArrows();
+  }catch(e){ status('Erreur réseau : ' + e.message); }
+}
+
+// Boussole : la flèche indique la direction par rapport à l'orientation du téléphone
+let heading = null;
+// Fond de carte : tuiles OpenStreetMap passées en gris, posées à l'échelle du rayon, sans bibliothèque
+function drawTiles(g, lat, lon, r){
+  const NS = 'http://www.w3.org/2000/svg';
+  const upm = 88 / r, cosl = Math.cos(rad(lat));
+  let z = Math.round(Math.log2(156543.03 * cosl * 88 / (0.4 * r)));
+  z = Math.max(3, Math.min(19, z));
+  const n = 2 ** z, k = 156543.03 * cosl / n * upm, T = 256 * k;
+  const wx = (lon + 180) / 360 * n;
+  const wy = (1 - Math.log(Math.tan(rad(lat)) + 1 / Math.cos(rad(lat))) / Math.PI) / 2 * n;
+  const span = 145 / T;
+  for (let tx = Math.floor(wx - span); tx <= Math.floor(wx + span); tx++)
+    for (let ty = Math.floor(wy - span); ty <= Math.floor(wy + span); ty++){
+      if (ty < 0 || ty >= n) continue;
+      const im = document.createElementNS(NS, 'image'), wrap = ((tx % n) + n) % n;
+      im.setAttribute('href', `https://tile.openstreetmap.org/${z}/${wrap}/${ty}.png`);
+      im.setAttribute('class', 'tile');
+      im.setAttribute('x', (tx - wx) * T); im.setAttribute('y', (ty - wy) * T);
+      im.setAttribute('width', T + 0.6); im.setAttribute('height', T + 0.6);
+      im.setAttribute('preserveAspectRatio', 'none');
+      g.appendChild(im);
+    }
+}
+let mapOn = true, lastMap = null;
+function setAttrUI(){
+  $('attrTxt').textContent = mapOn ? '© OpenStreetMap' : '';
+  $('xIcon').setAttribute('d', mapOn ? 'M87 87l6 6M93 87l-6 6' : 'M87 90h6M90 87v6');
+}
+try{ mapOn = localStorage.getItem('mapOff') !== '1'; }catch(e){}
+function toggleMap(){
+  mapOn = !mapOn;
+  try{ localStorage.setItem('mapOff', mapOn ? '0' : '1'); }catch(e){}
+  if (lastMap) drawMap(...lastMap); else setAttrUI();
+}
+$('attrBtn').onclick = toggleMap;
+$('attrBtn').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') toggleMap(); };
+function drawMap(items, lat, lon, r){
+  lastMap = [items, lat, lon, r];
+  setAttrUI();
+  const NS = 'http://www.w3.org/2000/svg', g = $('rot');
+  g.innerHTML = '';
+  if (mapOn) drawTiles(g, lat, lon, r);
+  const n = document.createElementNS(NS, 'text'); n.setAttribute('class','lbl'); n.setAttribute('y','-91'); n.textContent = 'N'; n.style.font = '700 9px system-ui'; g.appendChild(n);
+  items.forEach((p, i) => {
+    const b = rad(bearing(lat, lon, p.lat, p.lon)), d = Math.min(p.dist / r, 1) * 88;
+    const x = d * Math.sin(b), y = -d * Math.cos(b);
+    const c = document.createElementNS(NS, 'circle'); c.setAttribute('class','dot'); c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',7);
+    const t = document.createElementNS(NS, 'text'); t.setAttribute('class','dn'); t.setAttribute('x',x); t.setAttribute('y',y); t.textContent = i+1;
+    g.append(c, t);
+  });
+  const f = m => m >= 1000 ? (m/1000).toString().replace('.',',') + ' km' : Math.round(m) + ' m';
+  $('lblOut').textContent = f(r); $('lblIn').textContent = f(r/2);
+  rotMap();
+}
+function rotMap(){
+  const h = heading === null ? 0 : heading;
+  $('rot').setAttribute('transform', `rotate(${-h})`);
+  // les chiffres restent lisibles : on les redresse
+  $('rot').querySelectorAll('text').forEach(t => {
+    const x = +t.getAttribute('x') || 0, y = +t.getAttribute('y') || 0;
+    t.setAttribute('transform', `rotate(${h} ${x} ${y})`);
+  });
+}
+function updateArrows(){
+  document.querySelectorAll('.arrow').forEach(a => {
+    const b = +a.dataset.b;
+    a.style.transform = `rotate(${heading === null ? b : b - heading}deg)`;
+  });
+}
+function onOri(e){
+  let h = null;
+  if (e.webkitCompassHeading != null) h = e.webkitCompassHeading;
+  else if (e.alpha != null && (e.absolute || e.type === 'deviceorientationabsolute')) h = (360 - e.alpha) % 360;
+  if (h === null) return;
+  heading = h; updateArrows(); rotMap();
+}
+window.addEventListener('deviceorientationabsolute', onOri, true);
+window.addEventListener('deviceorientation', onOri, true);
+</script>
+</body>
+</html>

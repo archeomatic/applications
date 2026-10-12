@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Recadrage 1:1 — 300 dpi</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;font-family:Arial,sans-serif;background:#202124;color:#eee}
+header{height:58px;padding:10px 14px;background:#303134;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+button,input{font-size:14px;padding:7px 10px;border-radius:5px;border:1px solid #666}
+button{cursor:pointer;background:#444;color:white}.primary{background:#1769aa}
+main{display:flex;height:calc(100vh - 58px)}
+#left{width:300px;flex:none;padding:15px;background:#292a2d;overflow:auto}
+#viewer{position:relative;flex:1;min-width:0;min-height:0;overflow:hidden;background:#111}
+#canvas{display:block;width:100%;height:100%;cursor:crosshair}
+.row{margin:12px 0}.value{font-weight:bold}
+label{display:block;margin-bottom:5px}
+small{color:#bbb;line-height:1.4}
+hr{border:0;border-top:1px solid #555;margin:18px 0}
+#status{margin-top:15px;line-height:1.5;word-break:break-word}
+</style>
+</head>
+<body>
+<header>
+<input id="folder" type="file" webkitdirectory multiple accept=".jpg,.jpeg,.png,.tif,.tiff,.webp">
+<button id="prev">← Précédente</button>
+<button id="next">Suivante →</button>
+<button id="save" class="primary">Enregistrer la photo recadrée</button>
+</header>
+<main>
+<section id="left">
+<div class="row"><b>Taille du recadrage</b></div>
+<div class="row"><b>à l'échelle 1:1</b></div>
+<div class="row">
+<label>Taille du carré (mm) en sortie </label>
+<!-- paramétres pour la taille du cadre --> 
+<input id="sizeMm" type="number" min="10" step="1" value="30">
+</div>
+<div class="row">
+<hr>
+<b>Calibration</b><br>
+<small>Clique sur deux points séparés exactement de 1 cm dans la réalité sur l'échelle graphique.</small>
+</div>
+<div class="row">Pixels / cm : <span id="pxcm" class="value">—</span></div>
+<div class="row">Carré réel : <span id="squarePx" class="value">—</span> px dans la photo</div>
+<div class="row">Fichier de sortie : <span id="outPx" class="value">—</span> px à 300 dpi</div>
+<hr>
+<div class="row"><b>Après calibration</b><br>
+<small>Le carré rouge peut être déplacé à la souris. Les proportions restent fixes.</small></div>
+<div class="row">
+<button id="resetScale">Refaire la calibration</button>
+<button id="resetCrop">Recentrer le carré</button>
+</div>
+<hr>
+<div id="status" style="color: red;">Sélectionne un dossier contenant les photos.</div>
+</section>
+<section id="viewer">
+<canvas id="canvas"></canvas>
+</section>
+</main>
+<script>
+const folder=document.getElementById('folder');
+const viewer=document.getElementById('viewer');
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+const status=document.getElementById('status');
+const pxcmEl=document.getElementById('pxcm');
+const squarePxEl=document.getElementById('squarePx');
+const outPxEl=document.getElementById('outPx');
+const sizeMmEl=document.getElementById('sizeMm');
+
+let files=[], idx=0, img=null, objectUrl=null;
+let scalePts=[], pxcm=null;
+let crop={x:0,y:0,size:0};
+let dragging=false, dragOff={x:0,y:0};
+
+folder.addEventListener('change',()=>{
+  files=[...folder.files].filter(f=>/\.(jpe?g|png|tiff?|webp)$/i.test(f.name));
+  files.sort((a,b)=>a.name.localeCompare(b.name,navigator.language,{numeric:true}));
+  idx=0;
+  if(files.length) load();
+  else status.textContent='Aucune image compatible trouvée dans ce dossier.';
+});
+
+function load(){
+  if(objectUrl) URL.revokeObjectURL(objectUrl);
+  const f=files[idx];
+  objectUrl=URL.createObjectURL(f);
+  img=new Image();
+  img.onload=()=>{
+    scalePts=[];
+    pxcm=null;
+    crop={x:0,y:0,size:0};
+    updateStatus();
+    update();
+    draw();
+  };
+  img.onerror=()=>{status.textContent='Impossible de lire '+f.name;};
+  img.src=objectUrl;
+}
+
+function updateStatus(){
+  if(!files.length)return;
+  status.textContent=`photo ${idx+1} / ${files.length} — ${files[idx].name} — ${img ? img.naturalWidth+' × '+img.naturalHeight+' px' : ''}`;
+}
+
+function resizeCanvas(){
+  const r=viewer.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.round(r.width*dpr));
+  canvas.height=Math.max(1,Math.round(r.height*dpr));
+  canvas.style.width=r.width+'px';
+  canvas.style.height=r.height+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+function geom(){
+  const w=viewer.clientWidth, h=viewer.clientHeight;
+  const s=Math.min((w-20)/img.naturalWidth,(h-20)/img.naturalHeight);
+  const dw=img.naturalWidth*s, dh=img.naturalHeight*s;
+  return {s,x:(w-dw)/2,y:(h-dh)/2,w:dw,h:dh};
+}
+
+function draw(){
+  if(!img || !img.complete)return;
+  resizeCanvas();
+  const g=geom();
+  const w=viewer.clientWidth,h=viewer.clientHeight;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#111';
+  ctx.fillRect(0,0,w,h);
+  ctx.drawImage(img,g.x,g.y,g.w,g.h);
+
+  if(scalePts.length){
+    ctx.lineWidth=2;
+    ctx.strokeStyle='#00ff66';
+    ctx.fillStyle='#00ff66';
+    scalePts.forEach(p=>{
+      ctx.beginPath();ctx.arc(p.x,p.y,5,0,Math.PI*2);ctx.fill();
+    });
+    if(scalePts.length===2){
+      ctx.beginPath();
+      ctx.moveTo(scalePts[0].x,scalePts[0].y);
+      ctx.lineTo(scalePts[1].x,scalePts[1].y);
+      ctx.stroke();
+    }
+  }
+
+  if(pxcm && crop.size>0){
+    const sx=crop.x*g.s+g.x, sy=crop.y*g.s+g.y, ss=crop.size*g.s;
+    ctx.fillStyle='rgba(255,40,40,.12)';
+    ctx.fillRect(sx,sy,ss,ss);
+    ctx.strokeStyle='#ff4040';
+    ctx.lineWidth=2;
+    ctx.strokeRect(sx,sy,ss,ss);
+    ctx.fillStyle='#ff4040';
+    ctx.font='bold 14px Arial';
+    ctx.fillText(`${sizeMmEl.value} mm`,sx+6,sy+20);
+  }
+}
+
+function update(){
+  pxcmEl.textContent=pxcm ? pxcm.toFixed(2) : '—';
+  const mm=parseFloat(sizeMmEl.value)||20;
+  if(pxcm){
+    crop.size=pxcm*mm/10;
+    crop.x=Math.max(0,Math.min(img.naturalWidth-crop.size,crop.x));
+    crop.y=Math.max(0,Math.min(img.naturalHeight-crop.size,crop.y));
+    squarePxEl.textContent=Math.round(crop.size);
+  }else{
+    squarePxEl.textContent='—';
+  }
+  const out=Math.round(mm/25.4*300);
+  outPxEl.textContent=`${out} × ${out}`;
+  draw();
+}
+
+sizeMmEl.addEventListener('input',update);
+
+canvas.addEventListener('click',e=>{
+  if(!img)return;
+  const r=canvas.getBoundingClientRect(),g=geom();
+  const sx=e.clientX-r.left, sy=e.clientY-r.top;
+  if(!pxcm){
+    if(sx<g.x||sy<g.y||sx>g.x+g.w||sy>g.y+g.h)return;
+    scalePts.push({x:sx,y:sy});
+    if(scalePts.length===2){
+      const dx=scalePts[1].x-scalePts[0].x;
+      const dy=scalePts[1].y-scalePts[0].y;
+      const displayDist=Math.hypot(dx,dy);
+      pxcm=displayDist/g.s;
+      const mm=parseFloat(sizeMmEl.value)||20;
+      crop.size=pxcm*mm/10;
+      crop.x=Math.max(0,(img.naturalWidth-crop.size)/2);
+      crop.y=Math.max(0,(img.naturalHeight-crop.size)/2);
+    }
+    update();
+  }
+});
+
+canvas.addEventListener('mousedown',e=>{
+  if(!pxcm)return;
+  const r=canvas.getBoundingClientRect(),g=geom();
+  const sx=e.clientX-r.left,sy=e.clientY-r.top;
+  const x=(sx-g.x)/g.s,y=(sy-g.y)/g.s;
+  if(x>=crop.x&&x<=crop.x+crop.size&&y>=crop.y&&y<=crop.y+crop.size){
+    dragging=true;
+    dragOff={x:x-crop.x,y:y-crop.y};
+    canvas.style.cursor='grabbing';
+    e.preventDefault();
+  }
+});
+
+window.addEventListener('mousemove',e=>{
+  if(!dragging)return;
+  const r=canvas.getBoundingClientRect(),g=geom();
+  const sx=e.clientX-r.left,sy=e.clientY-r.top;
+  let x=(sx-g.x)/g.s-dragOff.x;
+  let y=(sy-g.y)/g.s-dragOff.y;
+  crop.x=Math.max(0,Math.min(img.naturalWidth-crop.size,x));
+  crop.y=Math.max(0,Math.min(img.naturalHeight-crop.size,y));
+  draw();
+});
+window.addEventListener('mouseup',()=>{
+  dragging=false;
+  canvas.style.cursor='crosshair';
+});
+
+document.getElementById('resetScale').onclick=()=>{
+  scalePts=[];pxcm=null;crop={x:0,y:0,size:0};update();
+};
+document.getElementById('resetCrop').onclick=()=>{
+  if(!pxcm)return;
+  crop.size=pxcm*(parseFloat(sizeMmEl.value)||20)/10;
+  crop.x=Math.max(0,(img.naturalWidth-crop.size)/2);
+  crop.y=Math.max(0,(img.naturalHeight-crop.size)/2);
+  draw();
+};
+document.getElementById('prev').onclick=()=>{
+  if(idx>0){idx--;load();}
+};
+document.getElementById('next').onclick=()=>{
+  if(idx<files.length-1){idx++;load();}
+};
+
+document.getElementById('save').onclick=()=>{
+  if(!img||!pxcm){alert('Calibre d’abord l’échelle avec les deux clics de 1 cm.');return;}
+  const mm=parseFloat(sizeMmEl.value)||20;
+  const out=Math.round(mm/25.4*300);
+  const tmp=document.createElement('canvas');
+  tmp.width=out;tmp.height=out;
+  const c=tmp.getContext('2d');
+  c.imageSmoothingEnabled=true;
+  c.imageSmoothingQuality='high';
+  c.drawImage(img,crop.x,crop.y,crop.size,crop.size,0,0,out,out);
+  tmp.toBlob(blob=>{
+    const a=document.createElement('a');
+    const base=files[idx].name.replace(/\.[^.]+$/,'');
+    a.href=URL.createObjectURL(blob);
+    a.download=base+'_ech1-1_300dpi.png';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  },'image/png');
+};
+
+window.addEventListener('resize',draw);
+</script>
+</body>
+</html>
